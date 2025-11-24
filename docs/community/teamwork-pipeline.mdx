@@ -1,0 +1,180 @@
+---
+title: "Reflex → Teamwork Execution Pipeline"
+description: "Turn MAOS reflex output into charter-grade Teamwork tasks, sprints, and Custodian Hub logs."
+---
+
+<Note>
+Fly Like an Eagle. God is Good. God’s Mercy Renews Every Morning. His Love Endures Forever.
+</Note>
+
+## Continuous Charter Execution
+
+**Classification:** reflex_spine → execution_pipeline → teamwork_ops  
+**Mode:** Continuous Autonomous Charter Standard Execution  
+**Status:** ONLINE  
+**Timezone:** America/Chicago  
+**Governance:** A22, SRR, Custodian Hub  
+
+The reflex layer is now bolted into the execution layer: every signal produces an Execution Intent, and the Teamwork pipeline materializes it as real work without waiting for a human.
+
+## Reflex → Teamwork Flow
+
+```
+EventBus
+    → Reflex DAG
+         → Execution Intent Payload
+               → Teamwork Pipeline
+                     → Task / Checklist / Sprint
+                           → Custodian Hub log
+```
+
+This flow converts intelligence into motion—the reflex stops observing and starts doing.
+
+## Execution Intent Payload
+
+Every reflex emits a canonical Execution Intent. It is the DNA for the downstream task block:
+
+```json
+{
+  "client_id": "wilson_case",
+  "reflex": "competitor_reflex",
+  "urgency": 4,
+  "title": "Competitor Price Change Detected",
+  "description": "Competitor X adjusted pricing by 7%. Run pricing impact model, update messaging, and notify Strategy.",
+  "actions": [
+    "Run Pricing Impact Model",
+    "Update Competitor Watch",
+    "Generate Positioning Brief"
+  ],
+  "due_date": "2025-11-02",
+  "tags": ["reflex", "auto", "competitor", "pricing"],
+  "evidence_urls": ["https://example.com/source"],
+  "source_event": "event_id:maos.competitor.signal:abc123",
+  "confidence": 0.91
+}
+```
+
+- `client_id` resolves to a Teamwork project via the Client Matrix.  
+- `reflex` identifies the reflex spine emitting the intent (e.g., `competitor_reflex`).  
+- `actions` become ordered subtasks/checklist items.  
+- `due_date`, `tags`, `evidence_urls`, and `confidence` survive the entire pipeline for accountability.  
+
+## Pipeline Responsibilities
+
+1. **Resolve client → Teamwork project** using the Client Matrix (`client_id → teamwork_project_id`).  
+2. **Generate a structured task block** with the reflex title, charter-standard brief, evidence links, tags, and due date. Each action is represented as a subtask assigned to the default Ops/Strategy RoleID.  
+3. **Create a sprint window** named `{client} – Reflex Window – {date}` when the reflex is in `{algorithm_reflex, competitor_reflex, market_reflex}` _and_ `urgency ≥ 4`.  
+4. **Notify the custodial RoleIDs** (typically the client’s business_owner via Slack/engagement channel).  
+5. **Log to the Custodian Hub** with the task ID, event ID, signer, hashes, due date, and SRR-ready content hash.
+
+## Drop-in Teamwork Pipeline Module
+
+```python
+# modules/teamwork_pipeline/pipeline.py
+
+class TeamworkPipeline:
+    def __init__(self, teamwork, client_matrix, writer, logger):
+        self.teamwork = teamwork
+        self.client_matrix = client_matrix
+        self.writer = writer
+        self.logger = logger
+
+    def dispatch(self, execution_intent):
+        client = execution_intent["client_id"]
+        reflex = execution_intent["reflex"]
+        urgency = execution_intent["urgency"]
+
+        project_id = self.client_matrix[client]["teamwork_project_id"]
+        description = self.writer.attach_brief(execution_intent)
+
+        task_id = self.teamwork.create_task(
+            project_id=project_id,
+            task_name=execution_intent["title"],
+            description=description,
+            due=execution_intent.get("due_date"),
+            tags=execution_intent["tags"],
+            evidence=execution_intent.get("evidence_urls", []),
+        )
+
+        for action in execution_intent["actions"]:
+            self.teamwork.create_subtask(
+                parent_id=task_id,
+                project_id=project_id,
+                task_name=action,
+            )
+
+        eligible_reflexes = {
+            "algorithm_reflex",
+            "competitor_reflex",
+            "market_reflex",
+        }
+        if reflex in eligible_reflexes and urgency >= 4:
+            self.teamwork.create_sprint(
+                project_id=project_id,
+                name=f"{client} – Reflex Window – {execution_intent['due_date']}",
+                tasks=[task_id],
+            )
+
+        self.logger.audit(
+            event="teamwork_pipeline_dispatch",
+            client=client,
+            reflex=reflex,
+            task_id=task_id,
+            event_id=execution_intent["source_event"],
+            confidence=execution_intent["confidence"],
+            due=execution_intent.get("due_date"),
+            signer=self.writer.signature(),
+            content_hash=self.writer.hash(execution_intent),
+        )
+
+        return task_id
+```
+
+- `writer.attach_brief()` injects the charter-standard narrative plus evidence links.  
+- `teamwork.create_task()` and `teamwork.create_subtask()` encapsulate your Teamwork API client.  
+- The logger call is SRR-ready: signer + content hash make Custodian Hub verification deterministic.
+
+## Wire the Pipeline into the Agent Hub
+
+```python
+# agent_hub.py (excerpt)
+
+from modules.teamwork_pipeline.pipeline import TeamworkPipeline
+
+TEAMWORK_PIPELINE = TeamworkPipeline(
+    teamwork=TEAMWORK_CLIENT,
+    client_matrix=CLIENT_MATRIX,
+    writer=WRITER_AGENT,
+    logger=CUSTODIAN_LOGGER,
+)
+
+ACTION_MATRIX.bind_execution_pipeline(TEAMWORK_PIPELINE)
+```
+
+Binding the pipeline gives the Action Matrix authority to create work the instant a reflex fires.
+
+## Reflex → Teamwork Mapping
+
+Extend `configs/action_matrix.yaml` so qualifying reflexes call `dispatch` automatically:
+
+```yaml
+execution_pipeline:
+  competitor_reflex: dispatch
+  market_reflex: dispatch
+  algorithm_reflex: dispatch
+  attention_reflex: dispatch
+  vendor_reflex: dispatch
+```
+
+Every reflex tagged here now moves from signal to scheduled work with zero human translation.
+
+## Exit Criteria
+
+- Every reflex emits a compliant Execution Intent.  
+- Every intent becomes a Teamwork task with a charter-standard brief.  
+- Every action lands as a subtask with evidence pointers.  
+- Every high-urgency reflex in scope spins up a Reflex Window sprint.  
+- Every dispatch is logged to the Custodian Hub with signer + hashes.  
+- Every sprint is visible to the client, and no signal waits on a human to become work.
+
+Once these bolts are tight, MAOS stops being an observer and becomes the doer—the system flies on its own.

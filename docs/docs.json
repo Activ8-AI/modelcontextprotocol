@@ -286,6 +286,12 @@
             ]
           },
           {
+            "group": "Execution Pipelines",
+            "pages": [
+              "community/teamwork-pipeline"
+            ]
+          },
+          {
             "group": "Examples",
             "pages": [
               "clients",
