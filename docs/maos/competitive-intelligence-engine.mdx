@@ -1,0 +1,167 @@
+---
+title: "MAOS Competitive Intelligence Engine (v1)"
+description: "Installation blueprint for the external surveillance organ that feeds the Client Intelligence Portal and Reflex pipelines."
+---
+
+<Info>
+Classification: **MAOS → Intelligence Plane → Web Analysis Agents → Client Portal**  
+Status: **Required for Charter Integrity**  
+Owner: **Custodian Matrix: Intelligence Plane / Client Portal Guild**  
+</Info>
+
+## Mission
+
+The Competitive Intelligence Engine (CIE) gives MAOS bilateral vision: internal telemetry is already routed through Reflex DAG → Teamwork → Action Matrix, and this module now pipes **external** competitor and industry signals into the same execution fabric. Without CIE, Client Portal surfaces lack situational awareness, Codex has no cross-client deltas, and governance cannot prove proactive coverage.
+
+## Capabilities Snapshot
+
+- **Always-on competitor surveillance** across sites, pricing, blogs, launches, ads, SEO/PPC boards, PR, feature logs, and sentiment feeds.
+- **Client-relative comparison** that highlights threats, gaps, and openings for every active account.
+- **Task-ready deltas** that flow directly into Teamwork with reflex priorities—no passive summaries.
+- **Charter-standard briefs** (Summary → Market Impact → Strategic Implication → Recommended Actions → Governance Notes → Confidence Score → Custodian Hash).
+- **Portal integration**: Competitor Intelligence tab, Industry Radar, Trend Watch, Risk Levels, Action Recommendations, and Revenue Impact overlays.
+
+## System Architecture
+
+| Layer | Purpose | Key Assets |
+| --- | --- | --- |
+| **Sensing** | Web analysis agents crawl, scrape, diff, and harvest structured metrics. | `surveillance_agent`, `research_agent`, `competitor_watch_agent`, `web_crawler_agent`, `signal_harvester_agent`, `content_diff_agent` |
+| **Contextualization** | Competitor Definition Map aligns raw signals with client matrices, CRM attributes, Codex briefs, and onboarding intel. | Notion DB + Codex schema (`cie_competitor_profile`) |
+| **Interpretation** | Reflex evaluators score severity, map to KPI/Revenue models, and normalize into CIE deltas. | Reflex DAG nodes `cie_detect`, `cie_compare`, `cie_recommend` |
+| **Execution** | Actionable deltas spawn Teamwork tasks and Portal updates with governance hooks. | Teamwork Reflex Pipes, Portal widgets, Custodian ledger |
+
+## Component Implementation
+
+### 1. Competitor Definition Map
+
+**Sources**: Client Matrix, onboarding packets, CRM account plans, legacy briefs, win/loss notes. Notion remains the human-editable surface; Codex stores the authoritative schema.
+
+**Schema baseline**
+
+```json
+{
+  "version": "1.0",
+  "entity_type": "cie_competitor_profile",
+  "client_id": "acme-retail",
+  "competitor": {
+    "name": "RetailCo",
+    "url": "https://retailco.com",
+    "segments": ["DTC", "Omnichannel"],
+    "priority": "Tier 1",
+    "watch_items": ["pricing", "promotions", "logistics-tech"],
+    "known_assets": ["AI try-on", "same-day shipping"],
+    "last_verified": "2025-11-20T04:00:00Z"
+  },
+  "intel_owner": "custodian:client-ops:retail",
+  "approved_channels": ["rss", "public-site", "linkedin", "youtube-ads"],
+  "suppressions": ["rumor", "uninstrumented-social"]
+}
+```
+
+**Operational notes**
+
+- `client_id` must mirror the Client Matrix slug.
+- Every competitor entry requires **Custodian Hash** (Notion formula referencing Codex entry id + timestamp) to satisfy Charter traceability.
+- Map refresh SLA: **72h** or immediately after a Reflex escalation.
+- Auto-ingest CRM updates nightly; conflicts favor Codex canonical field definitions.
+
+### 2. Web Analysis Agent Wiring
+
+All agents are cataloged in [`/docs/maos/agents.mdx`](./agents.mdx). Wiring steps:
+
+1. Register each agent in the Agent Hub with scope tags (`cie`, `external`, `surveillance`).
+2. Attach default **collection cadence**: pricing (6h), site/blog (4h), ads/PPC (hourly), sentiment (2h), launches/PR (event-driven RSS).
+3. Route outputs to the `cie_ingest` bus with normalized envelopes:
+
+```json
+{
+  "agent_id": "web_crawler_agent",
+  "client_id": "acme-retail",
+  "competitor_id": "retailco",
+  "signal_type": "pricing_change",
+  "payload": {},
+  "observed_at": "2025-11-24T06:15:00Z",
+  "confidence": 0.84
+}
+```
+
+4. Enforce **Content Diff Guardrails**: max 5% DOM change triggers human review; >15% auto-escalates to Reflex.
+5. Maintain per-agent error budgets (3 consecutive failures triggers `signal_harvester_agent` backfill sweep).
+
+### 3. Agent Hub Integration (`agents.mdx`)
+
+The Agent Hub now holds assignment rules, trigger logic, output contracts, confidence scoring formulas, and governance hooks for every web-analysis agent. Key expectations:
+
+- **Assignment rules**: Each client competitor pair gets at least two independent agents (eg. `web_crawler_agent` + `signal_harvester_agent`) for redundancy.
+- **Trigger logic**: Priority signals (pricing, SKU launch, ad blitz) bypass batching and sync straight into Reflex.
+- **Output contracts**: JSON schema includes `signal_type`, `materiality`, `recommended_action`, `confidence`, `custodian_hash`.
+- **Governance hooks**: Every agent emits `custodian_hash` + `collection_reason` for audit; high-risk signals require `lead_custodian` acknowledgement within 4 hours.
+
+See the Agent Hub page for the authoritative table.
+
+### 4. Teamwork Reflex Pipelines
+
+Reflex now has a dedicated branch `cie_delta`:
+
+1. **Detection** → `cie_detect` scores incoming signal vs Competitor Definition Map thresholds.
+2. **Comparison** → `cie_compare` references KPI → Revenue matrices and client playbooks to classify threat/opportunity.
+3. **Task materialization** → `cie_vectorize` crafts action-ready payloads with recommended owner, due date, and playbook link.
+4. **Teamwork creation** → `teamwork_bridge` pushes tasks with automation tags (`cie`, `reflex`, `external`).
+
+**Mandatory task templates**
+
+- *Competitor added new SKU* → Owner: Product Marketing, Due: 48h, Attachments: product sheet summary, diff screenshot.
+- *Competitor raised prices* → Owner: Revenue Ops, Auto-link to pricing model, include delta graph.
+- *Competitor launched new ad campaign* → Owner: Growth, include ad creative download + keyword list.
+- *Competitor targeting Client keywords* → Owner: SEO/PPC, autopopulate defensive play.
+
+Every task carries fields for `Confidence Score`, `Materiality`, `Revenue Exposure`, `Governance Notes`, and `Custodian Hash`. Status changes flow back into Reflex so Codex and Portal can mirror execution state.
+
+### 5. Client Portal Integration
+
+Add a **Competitor Intelligence** module composed of:
+
+- **Industry Radar**: rolling 7-day heatmap of signal counts by competitor and channel.
+- **Trend Watch**: curated timeline of major deltas with Charter-standard write-ups.
+- **Risk Levels**: per competitor risk dial computed from Reflex severity + task progress.
+- **Action Recommendations**: top three pending Teamwork actions, auto-refresh every 15 minutes.
+- **Revenue Impact Model**: displays KPI shifts tied to detected changes with expected revenue delta.
+
+Portal components consume the same CIE data service. Expose API endpoints:
+
+- `GET /cie/:clientId/competitors` → Map + latest scorecard.
+- `GET /cie/:clientId/deltas` → Filtered by materiality/severity.
+- `GET /cie/:clientId/tasks` → Teamwork mirror.
+
+Access control inherits Client Portal roles; only Custodians and account teams can see raw artifacts. Summaries are toned for executive view, while full deltas remain for operators.
+
+## Charter-standard Brief Template
+
+Each signal elevated to the Portal or Codex uses this structure:
+
+1. **Summary** – one-line what happened.
+2. **Market Impact** – why it matters.
+3. **Strategic Implication** – effect on client posture.
+4. **Recommended Actions** – prioritized list with owners/due dates.
+5. **Governance Notes** – custodianship, approvals, compliance notes.
+6. **Confidence Score** – 0–1 plus rationale.
+7. **Custodian Hash** – proof of stewardship.
+
+Store briefs in Codex using `cie_brief_v1` type; auto-link to Competitor Definition Map and Teamwork task IDs.
+
+## Operational Controls
+
+- **Heartbeats**: every agent posts uptime + collection counts; Reflex watches for gaps >2 cadences.
+- **Alerting**: Slack channel `#cie-watch` receives failure alerts, governance escalations, and digestion summaries.
+- **Testing**: weekly synthetic competitor event ensures full Reflex→Teamwork→Portal loop stays green.
+- **Audit**: monthly Custodian audit exports `custodian_hash`, incident log, remediation steps.
+
+## Activation Checklist
+
+1. Populate Competitor Definition Map for all Tier 1 clients.
+2. Enable six-agent roster per competitor with validated credentials.
+3. Confirm Agent Hub entries (`agents.mdx`) show confidence and governance hooks.
+4. Run synthetic event → verify Reflex tasks and Portal widgets update within SLA.
+5. Publish Charter-standard brief summarizing activation; archive Custodian Hash in Codex.
+
+Once these items clear, MAOS enters **External Awareness Ready** state and can claim full Charter compliance for Client Intelligence.

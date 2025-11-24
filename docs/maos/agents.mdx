@@ -1,0 +1,90 @@
+---
+title: "MAOS Agent Hub — Web Analysis Roster"
+description: "Assignment rules, triggers, and governance controls for the Competitive Intelligence Engine (v1) agents."
+---
+
+<Info>
+Scope: **Intelligence Plane → Web Analysis Agents**  
+Version: **1.0** (aligned with CIE v1 install)  
+Custodian: **Signal Operations Guild**  
+</Info>
+
+The Agent Hub is the canonical register for every web-analysis agent feeding the Competitive Intelligence Engine (CIE). Each entry must include triggers, output contracts, confidence formulas, and governance hooks so Reflex, Teamwork, and the Client Portal can trust upstream telemetry.
+
+## Agent Roster
+
+| Agent ID | Primary Mission | Trigger Inputs | Output Payload | Default Cadence | Fallback / Notes |
+| --- | --- | --- | --- | --- | --- |
+| `surveillance_agent` | Monitor hero pages, feature callouts, and visual merchandising changes. | DOM diffs, screenshot hashes, CDN asset timestamps. | `signal_type: ui_shift`, DOM diff patch, screenshot pair, heuristic of UX impact. | 4h sweep; event-driven on sitemap diff. | Falls back to `web_crawler_agent` if DOM exceeds 2 MB. |
+| `research_agent` | Track PR, newsroom posts, analyst notes, and filings. | RSS feeds, newsroom APIs, SEC/EDGAR updates. | `signal_type: announcement`, summary, source URI, inferred intent tags. | 2h; immediate on breaking PR. | Pulls from `signal_harvester_agent` when feeds fail. |
+| `competitor_watch_agent` | Observe pricing pages, SKU catalogs, packaging bundles. | Structured price blocks, schema.org product feeds. | `signal_type: pricing_change` or `sku_addition`, before/after table, % delta, affected geos. | 6h baseline; 30m during promo season. | Uses cached HTML to avoid rate limits. |
+| `web_crawler_agent` | General crawl + diff across root domains and microsites. | Sitemap + targeted URL list from Competitor Definition Map. | `signal_type: content_diff`, tokenized diff, DOM hash, topic classifier output. | 4h; adaptive on change bursts. | Hands large diffs to `content_diff_agent`. |
+| `signal_harvester_agent` | Aggregate ad libraries, PPC boards, SEO rank trackers, social mentions. | Meta/TikTok ad libs, Google Ads transparency, keyword SERP APIs, social firehose. | `signal_type: campaign_activity`, creative metadata, keyword list, spend class, sentiment index. | Hourly. | Acts as backfill agent when others miss SLAs. |
+| `content_diff_agent` | Deep-compare long-form artifacts (docs, blog posts, ToS, FAQs). | Markdown snapshots, PDF OCR outputs. | `signal_type: longform_update`, diff summary, entity extraction, policy impact score. | 8h; manual trigger allowed. | Requires human checkpoint for legal impacts. |
+
+Each agent entry includes:
+
+- **Scope tags**: `["cie", "external", "surveillance"]`
+- **Custodian Hash**: `sha256(agent_id + version + timestamp)` stored with briefing logs.
+- **Escalation level**: `low`, `medium`, `high` to guide Reflex throttle.
+
+## Assignment Rules
+
+- Minimum of **two agents per competitor** active at any time (diversity requirement).
+- Tier 1 competitors receive the full six-agent stack; Tier 2 may omit `content_diff_agent` if approved.
+- Every agent must map to a **custodian owner** with 24/5 coverage and on-call rotation documented in Codex.
+- When onboarding a new client, run the `Agent Fit` checklist: credentials validated, cadence tuned to vertical seasonality, storage buckets assigned.
+
+## Trigger Logic
+
+- **Priority 0 (Immediate Reflex)**: pricing delta ≥5%, new SKU in overlapping category, ad campaign in client keyword cluster, major PR/launch. Agents set `priority: p0`, and the Reflex bus bypasses batching.
+- **Priority 1 (Fast Track)**: UI refresh, messaging shift, tiered pricing adjustments, organic keyword displacement. Batched every 15 minutes.
+- **Priority 2 (Digest)**: Minor content changes, blog cadence shifts, low-spend ads. Bundled into hourly digest.
+- Triggers reference Competitor Definition Map watch items; anything tagged `critical_watch` auto-promotes one priority level.
+
+## Output Contracts
+
+All agents emit the `cie_signal_v1` envelope:
+
+```json
+{
+  "schema": "cie_signal_v1",
+  "agent_id": "signal_harvester_agent",
+  "client_id": "acme-retail",
+  "competitor_id": "retailco",
+  "priority": "p0",
+  "signal_type": "campaign_activity",
+  "materiality": 0.78,
+  "confidence": 0.87,
+  "recommended_action": "defend_keywords",
+  "payload": {},
+  "observed_at": "2025-11-24T07:05:00Z",
+  "custodian_hash": "sha256:...",
+  "collection_reason": "keyword_overlap:holiday-sale"
+}
+```
+
+- `materiality` is computed against KPI→Revenue mappings.
+- `recommended_action` references Reflex playbook ids when available.
+- `custodian_hash` ties to the agent owner and latest checklist revision.
+
+## Confidence Scoring
+
+Confidence = `signal_integrity_weight * source_quality + corroboration_weight * corroboration_factor + recency_weight * staleness_curve`.
+
+- Default weights: `0.5 / 0.3 / 0.2`.
+- Agents log component scores for audit; Reflex rejects payloads <0.4 unless a human override flag is set.
+- Cross-agent corroboration boosts confidence up to +0.15 when independent agents confirm within a 2h window.
+
+## Governance Hooks
+
+- **Custodian Ack**: High-risk (`priority: p0`) signals require custodian acknowledgement within 4 hours; otherwise Reflex escalates to Governance channel.
+- **Audit Trail**: Store raw artifacts (HTML, screenshots, PDFs, API JSON) in encrypted buckets with retention = 180 days.
+- **Suppression Policy**: Agents must respect `suppressions` field from the Competitor Definition Map; violations trigger automatic incident tickets.
+- **Heartbeat**: Agents post heartbeat to `cie-heartbeat` topic every cadence; missing two consecutive beats pages Signal Ops.
+
+## Integration Notes
+
+- When updating agent logic, bump the version string and regenerate Custodian Hashes.
+- Coordinate with Teamwork automation before introducing new `signal_type` values.
+- For dry runs or synthetic events, use `mode: "simulation"` in the envelope so Reflex can track test coverage without polluting live dashboards.
