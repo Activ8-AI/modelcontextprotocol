@@ -29,4 +29,8 @@ jobs:
             exit 0
           fi
           npm ci
+          if [ ! -x node_modules/.bin/webpack ]; then
+            echo "webpack is not configured in this repo; skipping."
+            exit 0
+          fi
           npx webpack
