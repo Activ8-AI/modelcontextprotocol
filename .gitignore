@@ -1,3 +1,7 @@
 .claude/
 node_modules/
 .DS_Store
+artifacts/prompt-library/operationalization/
+artifacts/action-persistence/
+artifacts/build-operationalization/
+artifacts/source-query-ladder/
