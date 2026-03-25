@@ -13,10 +13,24 @@ async function readJson(relativePath) {
 
 async function readText(relativePath) {
   const filePath = path.join(repoRoot, relativePath);
-  return readFile(filePath, "utf-8");
+  try {
+    return await readFile(filePath, "utf-8");
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
 }
 
-const thresholdConfig = await readJson("config/governance-thresholds.json");
+let thresholdConfig = null;
+try {
+  thresholdConfig = await readJson("config/governance-thresholds.json");
+} catch (error) {
+  if (error?.code !== "ENOENT") {
+    throw error;
+  }
+}
 const telemetrySource = await readText("src/prime-bridge/telemetry.ts");
 const telemetryTypes = await readText("src/prime-bridge/types.ts");
 const cloudBuild = await readText("cloudbuild.mcp.yaml");
@@ -26,32 +40,38 @@ const checks = [
   {
     name: "threshold config present",
     ok:
-      Array.isArray(thresholdConfig.t1_leading_indicators) &&
+      Array.isArray(thresholdConfig?.t1_leading_indicators) &&
       thresholdConfig.t1_leading_indicators.length >= 4 &&
-      Array.isArray(thresholdConfig.t2_thresholds) &&
+      Array.isArray(thresholdConfig?.t2_thresholds) &&
       thresholdConfig.t2_thresholds.length >= 4,
   },
   {
     name: "telemetry evaluator present",
-    ok: telemetrySource.includes("evaluateGovernanceThresholds") &&
+    ok: Boolean(
+      telemetrySource?.includes("evaluateGovernanceThresholds") &&
       telemetrySource.includes("leading_indicator_correction_loop_ratio") &&
-      telemetrySource.includes("t2_breaches.push"),
+      telemetrySource.includes("t2_breaches.push")
+    ),
   },
   {
     name: "telemetry types expose threshold fields",
-    ok: telemetryTypes.includes("threshold_evaluations") &&
+    ok: Boolean(
+      telemetryTypes?.includes("threshold_evaluations") &&
       telemetryTypes.includes("t1_alerts_total") &&
-      telemetryTypes.includes("thresholds?:"),
+      telemetryTypes.includes("thresholds?:")
+    ),
   },
   {
     name: "cloud build preflight runs threshold check",
-    ok: cloudBuild.includes("npm run governance:thresholds:check"),
+    ok: Boolean(cloudBuild?.includes("npm run governance:thresholds:check")),
   },
   {
     name: "telemetry tests cover threshold instrumentation",
-    ok: telemetryTest.includes("threshold") &&
+    ok: Boolean(
+      telemetryTest?.includes("threshold") &&
       telemetryTest.includes("t1_alerts") &&
-      telemetryTest.includes("t2_breaches"),
+      telemetryTest.includes("t2_breaches")
+    ),
   },
 ];
 
